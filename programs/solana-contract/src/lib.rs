@@ -12,6 +12,7 @@ pub mod solana_contract {
         ctx: Context<InitializeGame>,
         max_players: u8,
         entry_fee: u64,
+        name: String,
     ) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         let game = &mut ctx.accounts.game;
@@ -23,6 +24,7 @@ pub mod solana_contract {
         game.game_id = game_id.clone();
         game.creator = ctx.accounts.creator.key();
         game.max_players = max_players;
+        game.name = name.clone();
         game.entry_fee = entry_fee;
         game.state = GameState::WaitingForPlayers;
         game.created_at = clock.unix_timestamp;
@@ -39,6 +41,7 @@ pub mod solana_contract {
             game_id: game.game_id.clone(),
             creator: game.creator,
             max_players,
+            name,
             entry_fee,
         });
         
@@ -447,6 +450,7 @@ pub fn initialize_counter(ctx: Context<InitializeCounter>) -> Result<()> {
 #[account]
 pub struct Game {
     pub game_id: String,
+    pub name: String,
     pub creator: Pubkey,
     pub max_players: u8,
     pub entry_fee: u64,
@@ -528,6 +532,7 @@ pub enum NightActionType {
 #[event]
 pub struct GameCreated {
     pub game_id: String,
+    pub name: String,
     pub creator: Pubkey,
     pub max_players: u8,
     pub entry_fee: u64,
