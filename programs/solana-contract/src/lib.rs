@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::clock::Clock;
 use std::collections::HashMap;
 
-declare_id!("5t1yHkWXUynBXSvGpz9SZPpE5ewdUAFNk31eRgwqYuPT");
+declare_id!("C2CdtqX8Xb3Jask61G8g3xFzn6bmXcQ623YmcCeyFUPk");
 
 #[program]
 pub mod solana_contract {
@@ -348,7 +348,9 @@ fn check_win_condition(game: &Game) -> Result<Option<Winner>> {
 #[derive(Accounts)]
 pub struct InitializeGame<'info> {
     #[account(
-        mut,
+        init,
+        payer = creator,
+        space = GameCounter::SPACE,
         seeds = [b"game_counter"],
         bump
     )]
