@@ -2,7 +2,15 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "init-game": "ts-node scripts/initialize-game.ts",
+    "join-game": "ts-node scripts/join-game.ts",
+    "start-game": "ts-node scripts/start-game.ts",
+    "cast-vote": "ts-node scripts/cast-vote.ts",
+    "advance-phase": "ts-node scripts/advance-phase.ts",
+    "night-action": "ts-node scripts/night-action.ts",
+    "claim-winnings": "ts-node scripts/claim-winnings.ts",
+    "view-game": "ts-node scripts/view-game.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1"

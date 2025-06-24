@@ -10,14 +10,17 @@ pub mod solana_contract {
 
     pub fn initialize_game(
         ctx: Context<InitializeGame>,
-        game_id: String,
         max_players: u8,
         entry_fee: u64,
     ) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
         let game = &mut ctx.accounts.game;
         let clock = Clock::get()?;
         
-        game.game_id = game_id;
+        // Increment counter and generate game_id
+        counter.count += 1;
+        let game_id = format!("game-{}", counter.count);
+        game.game_id = game_id.clone();
         game.creator = ctx.accounts.creator.key();
         game.max_players = max_players;
         game.entry_fee = entry_fee;
@@ -49,7 +52,7 @@ pub mod solana_contract {
         let game = &mut ctx.accounts.game;
         
         require!(game.state == GameState::WaitingForPlayers, ErrorCode::GameNotJoinable);
-        require!(game.players.len() < game.max_players as usize, ErrorCode::GameFull);
+        require!(game.players.len() <= game.max_players as usize, ErrorCode::GameFull);
         require!(!game.players.iter().any(|p| p.address == player), ErrorCode::AlreadyJoined);
         
         // Transfer entry fee
@@ -343,13 +346,18 @@ fn check_win_condition(game: &Game) -> Result<Option<Winner>> {
 
 // Account structures
 #[derive(Accounts)]
-#[instruction(game_id: String)]
 pub struct InitializeGame<'info> {
+    #[account(
+        mut,
+        seeds = [b"game_counter"],
+        bump
+    )]
+    pub counter: Account<'info, GameCounter>,
     #[account(
         init,
         payer = creator,
         space = 8 + Game::SPACE,
-        seeds = [b"game", game_id.as_bytes()],
+        seeds = [b"game", format!("game-{}", counter.count + 1).as_bytes()],
         bump
     )]
     pub game: Account<'info, Game>,
@@ -401,6 +409,36 @@ pub struct ClaimWinnings<'info> {
     pub game: Account<'info, Game>,
     #[account(mut)]
     pub claimer: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeCounter<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = GameCounter::SPACE,
+        seeds = [b"game_counter"],
+        bump
+    )]
+    pub counter: Account<'info, GameCounter>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[account]
+pub struct GameCounter {
+    pub count: u64,
+}
+
+impl GameCounter {
+    pub const SPACE: usize = 8 + 8; // discriminator + u64
+}
+
+pub fn initialize_counter(ctx: Context<InitializeCounter>) -> Result<()> {
+    let counter = &mut ctx.accounts.counter;
+    counter.count = 0;
+    Ok(())
 }
 
 // Data structures
