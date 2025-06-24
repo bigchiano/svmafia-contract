@@ -275,41 +275,106 @@ pub mod solana_contract {
 
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
         let claimer = ctx.accounts.claimer.key();
+        
+        // Store values before mutable borrow
+        let game_key = ctx.accounts.game.key();
+        
+        let game = &mut ctx.accounts.game;
+        let game_id = game.game_id.clone();
+        
+        require!(game.state == GameState::Finished, ErrorCode::GameNotFinished);
+        require!(game.winner.is_some(), ErrorCode::NoWinner);
+        
+        // Check if claimer is a winner
+        let winner = game.winner.as_ref().unwrap();
+        let is_winner = match winner {
+            Winner::Mafia => game.players.iter().any(|p| p.address == claimer && p.role == Role::Mafia && p.is_alive),
+            Winner::Town => game.players.iter().any(|p| p.address == claimer && p.role != Role::Mafia && p.is_alive),
+        };
+        
+        require!(is_winner, ErrorCode::NotWinner);
+        
+        // Calculate winnings (simplified - equal split among winners)
+        let winner_count = game.players.iter().filter(|p| {
+            p.is_alive && match winner {
+                Winner::Mafia => p.role == Role::Mafia,
+                Winner::Town => p.role != Role::Mafia,
+            }
+        }).count();
+        
+        let winnings = game.entry_fee * game.players.len() as u64 / winner_count as u64;
+        
+        // Transfer winnings
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &game_key,
+            &claimer,
+            winnings,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.game.to_account_info(),
+                ctx.accounts.claimer.to_account_info(),
+            ],
+        )?;
+        
+        emit!(WinningsClaimed {
+            game_id,
+            claimer,
+            amount: winnings,
+        });
+        
+        Ok(())
+    }
 
-        {
-            let game = &mut ctx.accounts.game;
-
-            require!(game.state == GameState::Finished, ErrorCode::GameNotFinished);
-            require!(game.winner.is_some(), ErrorCode::NoWinner);
-
-            let winner = game.winner.as_ref().unwrap().clone();
-            let is_winner = match winner {
-                Winner::Mafia => game.players.iter().any(|p| p.address == claimer && p.role == Role::Mafia),
-                Winner::Town => game.players.iter().any(|p| p.address == claimer && p.role != Role::Mafia),
-            };
-
-            require!(is_winner, ErrorCode::NotWinner);
-
-            // Calculate winnings (simplified)
-            let total_pot = game.entry_fee * game.players.len() as u64;
-            let winner_count = match winner {
-                Winner::Mafia => game.players.iter().filter(|p| p.role == Role::Mafia).count(),
-                Winner::Town => game.players.iter().filter(|p| p.role != Role::Mafia).count(),
-            } as u64;
-
-            let payout = total_pot / winner_count;
-
-            // Transfer winnings
-            **ctx.accounts.game.to_account_info().try_borrow_mut_lamports()? -= payout;
-            **ctx.accounts.claimer.to_account_info().try_borrow_mut_lamports()? += payout;
-
-            emit!(WinningsClaimed {
-                game_id: ctx.accounts.game.game_id.clone(),
-                claimer,
-                amount: payout,
-            });
+    pub fn update_game_details(
+        ctx: Context<UpdateGameDetails>,
+        players: Vec<Player>,
+        mafia_members: Vec<Pubkey>,
+        votes: Vec<Vote>,
+        winning_team: Option<Winner>,
+        phase_start_time: i64,
+        phase_end_time: i64,
+    ) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        
+        require!(players.len() <= 20, ErrorCode::TooManyPlayers);
+        require!(game.creator == ctx.accounts.authority.key(), ErrorCode::NotCreator);
+        
+        // Clone values for the event
+        let game_id = game.game_id.clone();
+        let player_count = players.len() as u8;
+        let mafia_count = mafia_members.len() as u8;
+        let vote_count = votes.len() as u8;
+        let winner_clone = winning_team.clone();
+        
+        // Update game details
+        game.players = players;
+        game.votes = votes;
+        game.phase_start_time = phase_start_time;
+        game.phase_end_time = phase_end_time;
+        
+        // Update mafia members
+        for player in &mut game.players {
+            if mafia_members.contains(&player.address) {
+                player.role = Role::Mafia;
+            }
         }
-
+        
+        // Update winner if provided
+        if let Some(winner) = winning_team {
+            game.winner = Some(winner);
+            game.state = GameState::Finished;
+        }
+        
+        emit!(GameUpdated {
+            game_id,
+            player_count,
+            mafia_count,
+            vote_count,
+            winner: winner_clone,
+        });
+        
         Ok(())
     }
 }
@@ -431,6 +496,13 @@ pub struct InitializeCounter<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct UpdateGameDetails<'info> {
+    #[account(mut)]
+    pub game: Account<'info, Game>,
+    pub authority: Signer<'info>,
+}
+
 #[account]
 pub struct GameCounter {
     pub count: u64,
@@ -459,6 +531,7 @@ pub struct Game {
     pub day_count: u16,
     pub created_at: i64,
     pub phase_start_time: i64,
+    pub phase_end_time: i64,
     pub players: Vec<Player>,
     pub roles: Vec<Role>,
     pub votes: Vec<Vote>,
@@ -467,12 +540,12 @@ pub struct Game {
 }
 
 impl Game {
-    pub const SPACE: usize = 32 + 32 + 1 + 8 + 1 + 1 + 2 + 8 + 8 + 
-                             (32 + 1 + 1 + 32 + 8) * 20 + // players (max 20)
-                             1 * 20 + // roles
-                             (32 + 32 + 8) * 50 + // votes
-                             32 * 20 + // eliminated players
-                             1 + 1; // winner
+    pub const SPACE: usize = 32 + 32 + 1 + 8 + 1 + 1 + 2 + 8 + 8 + 8 + 
+                             4 + (20 * (32 + 1 + 1 + 33 + 8)) + // players: Vec<Player> (max 20)
+                             4 + (20 * 1) + // roles: Vec<Role> (max 20)
+                             4 + (20 * (32 + 32 + 8)) + // votes: Vec<Vote> (max 20)
+                             4 + (20 * 32) + // eliminated_players: Vec<Pubkey> (max 20)
+                             2; // winner: Option<Winner>
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
@@ -597,6 +670,15 @@ pub struct WinningsClaimed {
     pub amount: u64,
 }
 
+#[event]
+pub struct GameUpdated {
+    pub game_id: String,
+    pub player_count: u8,
+    pub mafia_count: u8,
+    pub vote_count: u8,
+    pub winner: Option<Winner>,
+}
+
 // Error codes
 #[error_code]
 pub enum ErrorCode {
@@ -634,4 +716,6 @@ pub enum ErrorCode {
     NoWinner,
     #[msg("Not a winner")]
     NotWinner,
+    #[msg("Too many players")]
+    TooManyPlayers,
 }
