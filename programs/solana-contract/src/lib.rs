@@ -10,9 +10,9 @@ pub mod solana_contract {
 
     pub fn initialize_game(
         ctx: Context<InitializeGame>,
+        name: String,
         max_players: u8,
         entry_fee: u64,
-        name: String,
     ) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         let game = &mut ctx.accounts.game;
