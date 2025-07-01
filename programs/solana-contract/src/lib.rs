@@ -8,6 +8,12 @@ declare_id!("C2CdtqX8Xb3Jask61G8g3xFzn6bmXcQ623YmcCeyFUPk");
 pub mod solana_contract {
     use super::*;
 
+    pub fn initialize_counter(ctx: Context<InitializeCounter>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        counter.count = 0;
+        Ok(())
+    }
+
     pub fn initialize_game(
         ctx: Context<InitializeGame>,
         name: String,
@@ -508,12 +514,6 @@ pub struct GameCounter {
 
 impl GameCounter {
     pub const SPACE: usize = 8 + 8; // discriminator + u64
-}
-
-pub fn initialize_counter(ctx: Context<InitializeCounter>) -> Result<()> {
-    let counter = &mut ctx.accounts.counter;
-    counter.count = 0;
-    Ok(())
 }
 
 // Data structures
