@@ -416,9 +416,7 @@ fn check_win_condition(game: &Game) -> Result<Option<Winner>> {
 #[derive(Accounts)]
 pub struct InitializeGame<'info> {
     #[account(
-        init,
-        payer = creator,
-        space = GameCounter::SPACE,
+        mut,
         seeds = [b"game_counter"],
         bump
     )]
