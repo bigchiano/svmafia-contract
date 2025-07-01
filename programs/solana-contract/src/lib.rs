@@ -418,6 +418,21 @@ fn check_win_condition(game: &Game) -> Result<Option<Winner>> {
     Ok(None)
 }
 
+#[derive(Accounts)]
+pub struct InitializeCounter<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = GameCounter::SPACE,
+        seeds = [b"game_counter"],
+        bump
+    )]
+    pub counter: Account<'info, GameCounter>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 // Account structures
 #[derive(Accounts)]
 pub struct InitializeGame<'info> {
