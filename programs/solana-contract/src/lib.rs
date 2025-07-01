@@ -486,21 +486,6 @@ pub struct ClaimWinnings<'info> {
 }
 
 #[derive(Accounts)]
-pub struct InitializeCounter<'info> {
-    #[account(
-        init,
-        payer = payer,
-        space = GameCounter::SPACE,
-        seeds = [b"game_counter"],
-        bump
-    )]
-    pub counter: Account<'info, GameCounter>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
 pub struct UpdateGameDetails<'info> {
     #[account(mut)]
     pub game: Account<'info, Game>,
