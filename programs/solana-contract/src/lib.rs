@@ -19,6 +19,7 @@ pub mod solana_contract {
         name: String,
         max_players: u8,
         entry_fee: u64,
+        is_public: bool
     ) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         let game = &mut ctx.accounts.game;
@@ -32,6 +33,7 @@ pub mod solana_contract {
         game.max_players = max_players;
         game.name = name.clone();
         game.entry_fee = entry_fee;
+        game.is_public = is_public;
         game.state = GameState::WaitingForPlayers;
         game.created_at = clock.unix_timestamp;
         game.phase_start_time = clock.unix_timestamp;
@@ -49,6 +51,7 @@ pub mod solana_contract {
             max_players,
             name,
             entry_fee,
+            is_public,
         });
         
         Ok(())
@@ -524,6 +527,7 @@ pub struct Game {
     pub creator: Pubkey,
     pub max_players: u8,
     pub entry_fee: u64,
+    pub is_public: bool,
     pub state: GameState,
     pub current_phase: GamePhase,
     pub day_count: u16,
@@ -543,7 +547,7 @@ impl Game {
                              4 + (20 * 1) + // roles: Vec<Role> (max 20)
                              4 + (20 * (32 + 32 + 8)) + // votes: Vec<Vote> (max 20)
                              4 + (20 * 32) + // eliminated_players: Vec<Pubkey> (max 20)
-                             2; // winner: Option<Winner>
+                             2 + 1; // winner: Option<Winner> + is_public: bool
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
@@ -607,6 +611,7 @@ pub struct GameCreated {
     pub creator: Pubkey,
     pub max_players: u8,
     pub entry_fee: u64,
+    pub is_public: bool,
 }
 
 #[event]
